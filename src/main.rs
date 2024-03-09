@@ -15,20 +15,20 @@ use api::pe::{
 };
 use serde_json::json;
 
-use crate::api::pe::player::PlayerManager;
+use crate::{api::pe::player::PlayerManager, config::ServerConfig};
 async fn ws_route(
     req: HttpRequest,
     stream: web::Payload,
     path: Path<String>,
     srv: web::Data<Addr<server::ChatServer>>,
-    players: web::Data<Addr<PlayerManager>>
+    players: web::Data<Addr<PlayerManager>>,
 ) -> Result<HttpResponse, Error> {
     ws::start(
         session::WsSession {
             id: 0,
             name: path.to_string(),
             addr: srv.get_ref().clone(),
-            playermanager:players.get_ref().clone()
+            playermanager: players.get_ref().clone(),
         },
         &req,
         stream,
@@ -75,15 +75,53 @@ async fn players_get(players: web::Data<Addr<PlayerManager>>) -> Json<Vec<String
         Err(_) => Json(vec!["".to_string()]),
     }
 }
+
+mod config;
+
+use rust_i18n::t;
+
+
+rust_i18n::i18n!("locales");
+
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
+//初始化日志输出
+fn init_log() {
+    use chrono::Local;
+    use std::io::Write;
+
+    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    let mut builder = env_logger::Builder::from_env(env);
+    println!("builder = {:?}", builder);
+    builder
+        .format(|buf, record| {
+            let level = { buf.default_level_style(record.level()) };
+            write!(buf, "{}", format_args!("{:<5}", level));
+            writeln!(buf, " {} {} [{}] {}",Local::now().format("%Y-%m-%d %H:%M:%S"),record.level(),record.module_path().unwrap_or("<unnamed>"), &record.args())
+        })
+        .init();
+    info!("env_logger initialized.");
+}
+
 #[actix_web::main]
+
 async fn main() -> std::io::Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    init_log();
+    // t!("hello", locale = "zh-CN");
+    let config = ServerConfig::default();
 
     // start chat server actor
     let server = server::ChatServer::new().start();
     let players = PlayerManager::new().start();
 
-    log::info!("starting HTTP server api at http://localhost:2000");
+    // println!("{}", t!("messages.hello","name" => "world", locale => "zh-CN"));
+
+    log::info!("IPv4支持, 端口: {}, http://localhost:{} : 用于接口和局域网发现", config.v4port,config.v4port);
+    log::info!("IPv6支持, 端口: {}, http://[::1]:{}     : 用于接口", config.v6port,config.v4port);
+    // log::info!("IPv6 supported, port: {}: Used for api",config.v6port);
+    // log::info!("IPv4 supported, port: {}: Used for api and LAN discovery",config.v4port);
 
     HttpServer::new(move || {
         App::new()
@@ -100,7 +138,8 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .workers(2)
-    .bind(("127.0.0.1", 2000))?
+    .bind(("127.0.0.1", config.v4port))?
+    .bind(("[::1]", config.v6port))?
     .run()
     .await
 }
