@@ -1,9 +1,9 @@
+use std::collections::HashMap;
+
 use actix::*;
 
 use actix_web::{
-    middleware::Logger,
-    web::{self, Json, Path},
-    App, Error, HttpRequest, HttpResponse, HttpResponseBuilder, HttpServer,
+    dev::ResourcePath, middleware::Logger, web::{self, Json, Path}, App, Error, HttpRequest, HttpResponse, HttpResponseBuilder, HttpServer
 };
 use actix_web_actors::ws;
 
@@ -13,20 +13,27 @@ use api::pe::{
     player::{Player, PlayerJoin, PlayerLeft, PlayersGet},
     server, session,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::{api::pe::player::PlayerManager, config::ServerConfig};
+
+#[derive(Deserialize,Debug)]
+struct ServerName{
+    server_name:String
+}
 async fn ws_route(
     req: HttpRequest,
     stream: web::Payload,
-    path: Path<String>,
     srv: web::Data<Addr<server::ChatServer>>,
     players: web::Data<Addr<PlayerManager>>,
+    server_name: web::Query<ServerName>
 ) -> Result<HttpResponse, Error> {
+    let name=&server_name.server_name;
     ws::start(
         session::WsSession {
             id: 0,
-            name: path.to_string(),
+            name: name.to_string(),
             addr: srv.get_ref().clone(),
             playermanager: players.get_ref().clone(),
         },
@@ -80,7 +87,6 @@ mod config;
 
 use rust_i18n::t;
 
-
 rust_i18n::i18n!("locales");
 
 #[macro_use]
@@ -92,22 +98,28 @@ fn init_log() {
     use chrono::Local;
     use std::io::Write;
 
-    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "warn");
     let mut builder = env_logger::Builder::from_env(env);
     println!("builder = {:?}", builder);
     builder
         .format(|buf, record| {
             let level = { buf.default_level_style(record.level()) };
             write!(buf, "{}", format_args!("{:<5}", level));
-            writeln!(buf, " {} {} [{}] {}",Local::now().format("%Y-%m-%d %H:%M:%S"),record.level(),record.module_path().unwrap_or("<unnamed>"), &record.args())
+            writeln!(
+                buf,
+                " {} {} [{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.module_path().unwrap_or("<unnamed>"),
+                &record.args()
+            )
         })
         .init();
     info!("env_logger initialized.");
 }
 
 #[actix_web::main]
-
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), std::io::Error> {
     init_log();
     // t!("hello", locale = "zh-CN");
     let config = ServerConfig::default();
@@ -118,11 +130,18 @@ async fn main() -> std::io::Result<()> {
 
     // println!("{}", t!("messages.hello","name" => "world", locale => "zh-CN"));
 
-    log::info!("IPv4支持, 端口: {}, http://localhost:{} : 用于接口和局域网发现", config.v4port,config.v4port);
-    log::info!("IPv6支持, 端口: {}, http://[::1]:{}     : 用于接口", config.v6port,config.v4port);
+    log::warn!(
+        "IPv4支持, 端口: {}, http://localhost:{} : 用于接口和局域网发现",
+        config.v4port,
+        config.v4port
+    );
+    log::warn!(
+        "IPv6支持, 端口: {}, http://[::1]:{}     : 用于接口",
+        config.v6port,
+        config.v4port
+    );
     // log::info!("IPv6 supported, port: {}: Used for api",config.v6port);
     // log::info!("IPv4 supported, port: {}: Used for api and LAN discovery",config.v4port);
-
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(server.clone()))
@@ -130,7 +149,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/pe")
                     .route("/player/chat", web::post().to(post_chat))
-                    .route("/ws/{server_name}", web::get().to(ws_route))
+                    .route("/ws", web::get().to(ws_route))
                     .route("/player/join", web::post().to(player_join))
                     .route("/player/left", web::post().to(player_left))
                     .route("/player/get", web::get().to(players_get))
