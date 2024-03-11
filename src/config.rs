@@ -45,7 +45,7 @@ pub fn generate_random(length: usize) -> String {
 }
 
 ///生成指定长度的数字密钥
-pub fn generate_random_number(length: usize) -> String {
+pub fn _generate_random_number(length: usize) -> String {
     let mut rng = rand::thread_rng();
     let characters: Vec<char> = "0123456789".chars().collect();
     let key: String = (0..length)
@@ -74,4 +74,26 @@ pub fn read_yml(file_path: &str) -> Result<ServerConfig, Box<dyn std::error::Err
     file.read_to_string(&mut contents)?;
     let config: ServerConfig = serde_yaml::from_str(&contents)?;
     Ok(config)
+}
+
+//初始化日志输出
+pub fn init_log() {
+    use chrono::Local;
+
+    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    let mut builder = env_logger::Builder::from_env(env);
+    builder
+        .format(|buf, record| {
+            let level = { buf.default_level_style(record.level()) };
+            writeln!(
+                buf,
+                "{} {} {} [{}] {}",
+                format_args!("{:<5}", level),
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.module_path().unwrap_or("<unnamed>"),
+                &record.args()
+            )
+        })
+        .init();
 }

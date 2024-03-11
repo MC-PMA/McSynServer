@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use actix::{Actor, Context, Handler, Message};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 /// 玩家基础数据
 #[derive(Serialize, Deserialize, Clone)]
@@ -47,7 +46,7 @@ impl PlayerManager {
         self.players.keys().cloned().collect()
     }
     /// 移除所有玩家
-    pub fn remove_player_all(&mut self) {
+    pub fn _remove_player_all(&mut self) {
         self.players.clear();
     }
     /// 删除指定服务端下的所有玩家
