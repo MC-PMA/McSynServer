@@ -33,6 +33,7 @@ pub async fn post_chat(
     // HttpResponseBuilder
     HttpResponse::Ok()
 }
+
 pub async fn player_join(
     player: web::Json<Player>,
     players: web::Data<Addr<PlayerManager>>,
