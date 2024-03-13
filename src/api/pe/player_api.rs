@@ -8,13 +8,15 @@ use actix_web::{
 };
 
 use futures_util::StreamExt;
-use log::info;
+use log::{debug, info};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::{
     fs::{create_dir_all, File},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+
+use crate::SAVE_DIR;
 
 use super::{
     chatserver,
@@ -63,6 +65,26 @@ pub async fn players_get(players: web::Data<Addr<PlayerManager>>) -> Json<Vec<St
     }
 }
 
+//检查玩家是否在线
+pub async fn player_check_online(
+    path: web::Path<String>,
+    players: web::Data<Addr<PlayerManager>>,
+) -> HttpResponseBuilder {
+    let player_name = path.as_str();
+    let this = players.as_ref().clone();
+    let msg = PlayersGet {};
+    let players = this.send(msg).await.unwrap();
+    for player in players {
+        if player == player_name {
+            return HttpResponse::Ok();
+        } else {
+            return HttpResponse::NotFound();
+        }
+    }
+    HttpResponse::NotFound()
+}
+
+
 pub fn player_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/player")
@@ -71,7 +93,8 @@ pub fn player_config(cfg: &mut web::ServiceConfig) {
             .route("/left", web::post().to(player_left))
             .route("/nbt/{player}/upload", web::post().to(player_nbt_upload))
             .route("/nbt/{player}/get", web::get().to(player_nbt_get))
-            .route("/get", web::get().to(players_get)),
+            .route("/get", web::get().to(players_get))
+            .route("/check_online/{player}", web::get().to(player_check_online)),
     );
 }
 
@@ -81,12 +104,12 @@ pub async fn player_nbt_upload(
     path: web::Path<String>,
     mut binary: web::Payload,
 ) -> HttpResponseBuilder {
+    info!("收到nbt上传请求");
     let player_name = path.as_str();
-    let save_dir: &str = "./api/pe/player";
-    let file = format!("{}/{}.nbt", save_dir, player_name);
+
+    let file = format!("{}/{}.nbt", SAVE_DIR, player_name);
 
     //创建文件夹
-    tokio::fs::create_dir_all(save_dir).await.err();
     let mut file = File::create(file).await.unwrap();
 
     //写入文件
@@ -94,9 +117,12 @@ pub async fn player_nbt_upload(
     while let Some(item) = binary.next().await {
         bytes.extend_from_slice(&item.unwrap());
     }
-    file.write_all(&bytes.to_vec()).await.unwrap();
-    file.try_clone().await.unwrap();
-    HttpResponse::Ok()
+    match file.write_all(&bytes.to_vec()).await {
+        Ok(_) => HttpResponse::Ok(),
+        Err(err) => {
+            return HttpResponse::InternalServerError();
+        }
+    }
 }
 
 // 提供玩家nbt文件
@@ -104,9 +130,9 @@ pub async fn player_nbt_get(
     //路径参数
     path: web::Path<String>,
 ) -> HttpResponse {
+    info!("收到nbt获取请求");
     let player_name = path.as_str();
-    let save_dir: &str = "./api/pe/player";
-    let file = format!("{}/{}.nbt", save_dir, player_name);
+    let file = format!("{}/{}.nbt", SAVE_DIR, player_name);
     let file = File::open(file).await;
     match file {
         Ok(file) => {

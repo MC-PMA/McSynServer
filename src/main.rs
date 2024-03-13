@@ -21,6 +21,13 @@ use rust_i18n::t;
 rust_i18n::i18n!("locales");
 
 use crate::config::init_log;
+
+
+
+
+const SAVE_DIR: &str = "./api/pe/player";
+
+
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> { 
     init_log();
@@ -43,6 +50,7 @@ async fn main() -> Result<(), std::io::Error> {
         config.v6port,
         config.v4port
     );
+    tokio::fs::create_dir_all(SAVE_DIR).await.err();
 
     HttpServer::new(move || {
         App::new()
