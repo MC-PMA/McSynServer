@@ -1977,6 +1977,7 @@ dependencies = [
  "actix-web-actors",
  "chrono",
  "env_logger",
+ "futures-util",
  "log",
  "rand",
  "rust-i18n",

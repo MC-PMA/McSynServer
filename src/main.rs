@@ -1,5 +1,6 @@
 use actix::*;
 
+use actix_files::Directory;
 use actix_web::{
     web::{self},
     App, HttpServer,
@@ -21,7 +22,7 @@ rust_i18n::i18n!("locales");
 
 use crate::config::init_log;
 #[actix_web::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<(), std::io::Error> { 
     init_log();
     // t!("hello", locale = "zh-CN");
     let config = ServerConfig::default();
@@ -42,6 +43,7 @@ async fn main() -> Result<(), std::io::Error> {
         config.v6port,
         config.v4port
     );
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(server.clone()))
