@@ -3,20 +3,55 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 /// 服务端配置文件
+/// v4port: ipv4端口
+/// v6port: ipv6端口
+/// token: 服务端token
+/// money_mode: 单机模式/多机模式
+/// sql_mode: sqlite/postgres/mongodb
+/// postgres_config: Postgres配置
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub v4port: u16,
     pub v6port: u16,
-    pub ws_token: String,
+    pub token: String,
+    pub money_mode: String,
+    pub sql_mode: String,
+    pub postgres_config: PostgresConfig,
 }
 
+/// Postgres配置
+/// host: 数据库地址
+/// port: 数据库端口
+/// user: 数据库用户名
+/// password: 数据库密码
+/// database: 数据库名
+#[derive(Clone, Serialize, Deserialize,Default)]
+pub struct PostgresConfig {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    pub database: String,
+}
+
+/// 默认配置
+/// 默认配置文件路径为config.yml
+///  v4port: 2000
+/// v6port: 2000
+/// token: 随机生成的16位字符串
+/// money_mode: single/multi
+/// sql_mode: sqlite/postgres/mongodb
+/// postgres_config: PostgresConfig默认配置
 impl Default for ServerConfig {
     fn default() -> Self {
         let file_path = "config.yml";
         let config = ServerConfig {
             v4port: 2000,
             v6port: 2000,
-            ws_token: generate_random(16),
+            token: generate_random(16),
+            money_mode: "single/multi".to_string(),
+            sql_mode: "sqlite/postgres/mongodb".to_string(),
+            postgres_config:PostgresConfig::default(),
         };
         match read_yml(&file_path) {
             Ok(config) => config,
@@ -27,6 +62,8 @@ impl Default for ServerConfig {
         }
     }
 }
+
+
 
 use rand::Rng;
 ///随机生成指定长度的密钥

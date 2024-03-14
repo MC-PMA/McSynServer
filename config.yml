@@ -1,3 +1,11 @@
 v4port: 2000
 v6port: 2000
-ws_token: mzgv0Ly5oKo3sMU5
+token: DxxL2sbXCbBoVPdh
+money_mode: single/multi
+sql_mode: sqlite/postgres/mongodb
+postgres_config:
+  host: ''
+  port: 0
+  user: ''
+  password: ''
+  database: ''

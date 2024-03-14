@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use actix::*;
 
 use actix_web::{
@@ -8,15 +6,14 @@ use actix_web::{
 };
 
 use futures_util::StreamExt;
-use log::{debug, info};
-use serde::Deserialize;
+use log::info;
 use serde_json::json;
 use tokio::{
-    fs::{create_dir_all, File},
+    fs::File,
     io::{AsyncReadExt, AsyncWriteExt},
 };
 
-use crate::SAVE_DIR;
+use crate::DIR_PATH_PLAYER_NBT;
 
 use super::{
     chatserver,
@@ -26,7 +23,12 @@ use super::{
 pub async fn post_chat(
     player: web::Json<Player>,
     srv: web::Data<Addr<chatserver::ChatServer>>,
+    token_path: web::Path<String>,
+    token: web::Data<String>,
 ) -> HttpResponseBuilder {
+    if token_path.as_str() != token.as_str() {
+        return HttpResponse::Unauthorized();
+    }
     let msg = chatserver::BroadcastMessage {
         msg: json!(player).to_string(),
     };
@@ -38,7 +40,12 @@ pub async fn post_chat(
 pub async fn player_join(
     player: web::Json<Player>,
     players: web::Data<Addr<PlayerManager>>,
+    token_path: web::Path<String>,
+    token: web::Data<String>,
 ) -> HttpResponseBuilder {
+    if token_path.as_str() != token.as_str() {
+        return HttpResponse::Unauthorized();
+    }
     let player_manager = players.as_ref().clone();
     let player_join = PlayerJoin { player: player.0 };
     player_manager.do_send(player_join);
@@ -48,14 +55,26 @@ pub async fn player_join(
 pub async fn player_left(
     player: web::Json<Player>,
     players: web::Data<Addr<PlayerManager>>,
+    token_path: web::Path<String>,
+    token: web::Data<String>,
 ) -> HttpResponseBuilder {
+    if token_path.as_str() != token.as_str() {
+        return HttpResponse::Unauthorized();
+    }
     let player_manager = players.as_ref().clone();
     let player_join = PlayerLeft { player: player.0 };
     player_manager.do_send(player_join);
     HttpResponse::Ok()
 }
 
-pub async fn players_get(players: web::Data<Addr<PlayerManager>>) -> Json<Vec<String>> {
+pub async fn players_get(
+    players: web::Data<Addr<PlayerManager>>,
+    token: web::Data<String>,
+    token_path: web::Path<String>,
+) -> Json<Vec<String>> {
+    if token_path.as_str() != token.as_str() {
+        return Json(vec!["".to_string()]);
+    }
     let this = players.as_ref().clone();
     let msg = PlayersGet {};
     let players = this.send(msg).await;
@@ -84,16 +103,15 @@ pub async fn player_check_online(
     HttpResponse::NotFound()
 }
 
-
 pub fn player_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/player")
-            .route("/chat", web::post().to(post_chat))
-            .route("/join", web::post().to(player_join))
-            .route("/left", web::post().to(player_left))
-            .route("/nbt/{player}/upload", web::post().to(player_nbt_upload))
-            .route("/nbt/{player}/get", web::get().to(player_nbt_get))
-            .route("/get", web::get().to(players_get))
+            .route("/chat/{token_path}", web::post().to(post_chat))
+            .route("/join/{token_path}", web::post().to(player_join))
+            .route("/left/{token_path}", web::post().to(player_left))
+            .route("/nbt/{player}/upload/{token_path}", web::post().to(player_nbt_upload))
+            .route("/nbt/{player}/get/{token_path}", web::get().to(player_nbt_get))
+            .route("/get/{token_path}", web::get().to(players_get))
             .route("/check_online/{player}", web::get().to(player_check_online)),
     );
 }
@@ -103,11 +121,16 @@ pub async fn player_nbt_upload(
     //路径参数
     path: web::Path<String>,
     mut binary: web::Payload,
+    token_path: web::Path<String>,
+    token: web::Data<String>,
 ) -> HttpResponseBuilder {
+    if token_path.as_str() != token.as_str() {
+        return HttpResponse::Unauthorized();
+    }
     info!("收到nbt上传请求");
     let player_name = path.as_str();
 
-    let file = format!("{}/{}.nbt", SAVE_DIR, player_name);
+    let file = format!("{}/{}.nbt", DIR_PATH_PLAYER_NBT, player_name);
 
     //创建文件夹
     let mut file = File::create(file).await.unwrap();
@@ -119,7 +142,7 @@ pub async fn player_nbt_upload(
     }
     match file.write_all(&bytes.to_vec()).await {
         Ok(_) => HttpResponse::Ok(),
-        Err(err) => {
+        Err(_err) => {
             return HttpResponse::InternalServerError();
         }
     }
@@ -129,10 +152,15 @@ pub async fn player_nbt_upload(
 pub async fn player_nbt_get(
     //路径参数
     path: web::Path<String>,
+    token_path: web::Path<String>,
+    token: web::Data<String>,
 ) -> HttpResponse {
+    if token_path.as_str() != token.as_str() {
+        return HttpResponse::NotFound().finish();
+    }
     info!("收到nbt获取请求");
     let player_name = path.as_str();
-    let file = format!("{}/{}.nbt", SAVE_DIR, player_name);
+    let file = format!("{}/{}.nbt", DIR_PATH_PLAYER_NBT, player_name);
     let file = File::open(file).await;
     match file {
         Ok(file) => {
@@ -143,7 +171,7 @@ pub async fn player_nbt_get(
                 .content_type("application/octet-stream")
                 .body(bytes.to_vec());
         }
-        Err(err) => {
+        Err(_err) => {
             return HttpResponse::NotFound().finish();
         }
     }

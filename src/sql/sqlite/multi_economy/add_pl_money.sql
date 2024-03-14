@@ -1,0 +1,1 @@
+INSERT INTO multi_economy (uuid, money, balance) VALUES (?, ?, ?)
