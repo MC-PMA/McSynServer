@@ -24,6 +24,9 @@ pub async fn ws_route(
     server_name: web::Query<ServerName>,
 ) -> Result<HttpResponse, Error> {
     let name = &server_name.server_name;
+    if name.is_empty() {
+        return Ok(HttpResponse::BadRequest().finish());
+    }
     ws::start(
         WsSession {
             id: 0,

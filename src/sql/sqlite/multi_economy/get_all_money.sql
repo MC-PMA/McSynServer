@@ -1,0 +1,1 @@
+SELECT * FROM multi_economy_key

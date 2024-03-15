@@ -1,9 +1,10 @@
 use actix::Actor;
+use actix_web::http::Error;
 use log::info;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::DIR_PATH_SQLITE;
+use crate::{api::pe::player_api::ResponseMessage, DIR_PATH_SQLITE};
 
 #[derive(Debug, Clone)]
 pub struct MultiMoneySqlite {
@@ -62,118 +63,219 @@ impl MultiMoneySqlite {
     /// };
     /// multi_money_sqlite.add_money(multi_money);
     /// ```
-    pub fn add_money(&self, multi_economy: MultiMoney) -> Result<usize, rusqlite::Error> {
+    pub fn add_money(&self, multi_economy: MultiMoney) -> ResponseMessage {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/add_money.sql");
-        conn.execute(stmt, params![multi_economy.money, multi_economy.key])
+        match conn.execute(stmt, params![multi_economy.money, multi_economy.key]) {
+            Ok(_) => ResponseMessage {
+                r#type: "success".to_string(),
+                message: "添加成功".to_string(),
+            },
+            Err(_) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "重复添加".to_string(),
+            },
+        }
     }
 
     // 删除一种经济体
-    pub fn delete_money_key(&self, money: MultiMoney) -> Result<usize, rusqlite::Error> {
+    pub fn delete_money_key(&self, money: MultiMoney) -> ResponseMessage {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/delete_money_key.sql");
-        let _ = conn.execute(stmt, params![money.money, money.key]);
-        self.delete_money(money.money)
+        match conn.execute(stmt, params![money.money, money.key]) {
+            Ok(_) => self.delete_money(money.money),
+            Err(_) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "删除失败".to_string(),
+            },
+        }
     }
 
     // 删除经济->玩家经济
-    fn delete_money(&self, money: String) -> Result<usize, rusqlite::Error> {
+    fn delete_money(&self, money: String) -> ResponseMessage {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/delete_money.sql");
-        conn.execute(stmt, params![money])
+        // conn.execute(stmt, params![money])
+        match conn.execute(stmt, params![money]) {
+            Ok(_) => ResponseMessage {
+                r#type: "success".to_string(),
+                message: "删除成功".to_string(),
+            },
+            Err(_) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "删除失败".to_string(),
+            },
+        }
     }
 
-    // 修改一种经济体
-    pub fn update_money_key(
-        &self,
-        multi_economy: MultiMoney,
-        money: String,
-    ) -> Result<usize, rusqlite::Error> {
-        if self.get_money_key(money.clone()).unwrap() {
+    // 修改经济体名
+    pub fn update_money_key(&self, multi_economy: MultiMoney, money: String) -> ResponseMessage {
+        if self.get_money_key(multi_economy.money.clone()) {
             let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
             let stmt = include_str!("../sql/sqlite/multi_economy/update_money_key_name.sql");
-            let _ = conn.execute(stmt, params![money, multi_economy.money, multi_economy.key]);
-            self.update_money(multi_economy, money)
+            match conn.execute(stmt, params![money, multi_economy.money, multi_economy.key]) {
+                Ok(_) => self.update_money(multi_economy, money),
+                Err(_) => ResponseMessage {
+                    r#type: "error".to_string(),
+                    message: "修改失败".to_string(),
+                },
+            }
+        } else if self.get_money_key(money.clone()) {
+            ResponseMessage {
+                r#type: "error".to_string(),
+                message: "经济体名已被占用".to_string(),
+            }
         } else {
-            return Err(rusqlite::Error::QueryReturnedNoRows);
+            ResponseMessage {
+                r#type: "error".to_string(),
+                message: "经济体不存在".to_string(),
+            }
         }
     }
 
     // 修改玩家经济名
-    pub fn update_money(
-        &self,
-        multi_economy: MultiMoney,
-        money: String,
-    ) -> Result<usize, rusqlite::Error> {
+    pub fn update_money(&self, multi_economy: MultiMoney, money: String) -> ResponseMessage {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/update_money_name.sql");
-        conn.execute(stmt, params![money, multi_economy.money])
+        // conn.execute(stmt, params![money, multi_economy.money])
+        match conn.execute(stmt, params![money, multi_economy.money]) {
+            Ok(_) => ResponseMessage {
+                r#type: "success".to_string(),
+                message: "修改成功".to_string(),
+            },
+            Err(_) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "修改失败".to_string(),
+            },
+        }
     }
 
-    // 检查某个经济是否存在
-    pub fn get_money_key(&self, money_name: String) -> Result<bool, rusqlite::Error> {
+    // 检查某个经济体是否存在
+    pub fn get_money_key(&self, money_name: String) -> bool {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/get_money_key.sql");
         let mut stmt = conn.prepare(stmt).unwrap();
         let mut rows = stmt.query(params![money_name]).unwrap();
-        if let Some(_) = rows.next().unwrap() {
-            return Ok(true);
-        } else {
-            return Ok(false);
+        let mut has_data = false;
+        while let Some(row) = rows.next().unwrap() {
+            has_data = true;
         }
+        if !has_data {
+            false
+        } else {
+            true
+        }
+
+        // match rows.next().unwrap() {
+        //     Some(_) =>
+        //     {
+        //         info!("有数据");
+        //         return true;
+
+        //     },
+        //     None =>
+        //     {
+        //         info!("没有数据");
+        //         return false;
+
+        //     },
+        // }
+        // match rows.next() {
+        //     Ok(None) =>
+        //     {
+        //         info!("有数据");
+        //         return true;
+
+        //     },
+        //     Err(_) =>
+        //     {
+        //         info!("没有数据");
+        //         return false;
+        //     },
+        // }
+        // if let Some(_row) = rows.next().unwrap(){
+        //     return true;
+        // }else {
+        //     return false;
+        // }
+        // if let Some(_row) = rows.next().unwrap() {
+        //     return true;
+        // }else {
+        //     return false;
+        // }
     }
 
     // 获取所有经济
     pub fn get_all_money(&self) -> Result<Vec<MultiMoney>, rusqlite::Error> {
-        let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
-        // let stmt = include_str!("../sql/sqlite/multi_economy/get_all_money.sql");
-        let stmt = "SELECT * FROM multi_economy_key";
-        let mut stmt = conn.prepare(stmt).unwrap();
-        let mut rows = stmt.query(params![]).unwrap();
+        let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db")?;
+        let stmt = include_str!("../sql/sqlite/multi_economy/get_all_money.sql");
+        let mut stmt = conn.prepare(stmt)?;
+        let mut rows = stmt.query(params![])?;
         let mut multi_moneys = Vec::new();
-        while let Some(row) = rows.next().unwrap() {
+        while let Some(row) = rows.next()? {
             multi_moneys.push(MultiMoney {
-                money: row.get(0).unwrap(),
-                key: row.get(1).unwrap(),
+                money: row.get(0)?,
+                key: row.get(1)?,
             });
         }
         Ok(multi_moneys)
     }
 
     // 添加一条玩家经济
-    pub fn init_pl_money(&self, player: MultiPlayerMoney) -> Result<usize, rusqlite::Error> {
-        if self.get_money_key(player.money.clone()).unwrap() {
+    pub fn init_pl_money(&self, player: MultiPlayerMoney) -> ResponseMessage {
+        if self.get_money_key(player.money.clone()) {
             let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
             let stmt = include_str!("../sql/sqlite/multi_economy/add_pl_money.sql");
             // let stmt = "INSERT INTO multi_economy (uuid, money, balance) VALUES (?, ?, ?)";
-            conn.execute(stmt, params![player.uuid, player.money, &player.balance])
+            // conn.execute(stmt, params![player.uuid, player.money, &player.balance])
+            match conn.execute(stmt, params![player.uuid, player.money, player.balance]) {
+                Ok(_) => ResponseMessage {
+                    r#type: "success".to_string(),
+                    message: "添加成功".to_string(),
+                },
+                Err(_) => ResponseMessage {
+                    r#type: "error".to_string(),
+                    message: "添加失败".to_string(),
+                },
+            }
         } else {
-            Err(rusqlite::Error::QueryReturnedNoRows)
+            // Err(rusqlite::Error::QueryReturnedNoRows)
+            ResponseMessage {
+                r#type: "error".to_string(),
+                message: "添加失败".to_string(),
+            }
         }
     }
 
-    // 获取玩家经济
+    // 获取玩家经济余额
     pub fn get_pl_money(&self, uuid: String, money: String) -> Result<i32, rusqlite::Error> {
         let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
         let stmt = include_str!("../sql/sqlite/multi_economy/get_money.sql");
         conn.query_row(stmt, params![uuid, money], |row| row.get(0))
     }
 
-    // 更新玩家经济
-    pub fn update_pl_money(&self, player: MultiPlayerMoney) -> Result<usize, rusqlite::Error> {
-        if self.get_money_key(player.money.clone()).unwrap() {
+    // 更新玩家经济余额
+    pub fn update_pl_money(&self, player: MultiPlayerMoney) -> ResponseMessage {
+        info!("{:?}", self.get_money_key(player.money.clone()));
+        if self.get_money_key(player.money.clone()) {
             let conn = Connection::open(DIR_PATH_SQLITE.to_owned() + "/money.db").unwrap();
             let stmt = include_str!("../sql/sqlite/multi_economy/updata_money.sql");
-            conn.execute(stmt, params![player.balance, player.uuid, player.money])
+            conn.execute(stmt, params![player.balance, player.uuid, player.money]);
+            ResponseMessage {
+                r#type: "success".to_string(),
+                message: "修改成功".to_string(),
+            }
         } else {
-            return Err(rusqlite::Error::QueryReturnedNoRows);
+            ResponseMessage {
+                r#type: "error".to_string(),
+                message: "经济体不存在".to_string(),
+            }
         }
     }
 
     // 增加玩家经济
-    pub fn add_pl_money(&self, player: MultiPlayerMoney) -> Result<usize, rusqlite::Error> {
-        let balance = self
-            .get_pl_money(player.uuid.clone(), player.money.clone());
+    pub fn add_pl_money(&self, player: MultiPlayerMoney) -> ResponseMessage {
+        let balance = self.get_pl_money(player.uuid.clone(), player.money.clone());
         match balance {
             Ok(balance) => {
                 let player = MultiPlayerMoney {
@@ -183,17 +285,16 @@ impl MultiMoneySqlite {
                 };
                 self.update_pl_money(player)
             }
-            Err(_err) => {
-                Err(_err)
-            }
+            Err(_err) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "请检查数据源是否存在".to_string(),
+            },
         }
-        
     }
 
     // 减少玩家经济
-    pub fn reduce_pl_money(&self, player: MultiPlayerMoney) -> Result<usize, rusqlite::Error> {
-        let balance = self
-            .get_pl_money(player.uuid.clone(), player.money.clone());
+    pub fn reduce_pl_money(&self, player: MultiPlayerMoney) -> ResponseMessage {
+        let balance = self.get_pl_money(player.uuid.clone(), player.money.clone());
         match balance {
             Ok(balance) => {
                 let player = MultiPlayerMoney {
@@ -203,9 +304,10 @@ impl MultiMoneySqlite {
                 };
                 self.update_pl_money(player)
             }
-            Err(_err) => {
-                Err(_err)
-            }
+            Err(_err) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "请检查数据源是否存在".to_string(),
+            },
         }
     }
 
@@ -216,35 +318,37 @@ impl MultiMoneySqlite {
         player2_uuid: String,
         balance1: i32,
         money: String,
-    ) -> bool {
-        let balance = self
-            .get_pl_money(player1_uuid.clone(), money.clone())
-            .unwrap();
-        println!("{:?}", balance);
-        println!("{:?}",self. debt_limit);
-        if balance >= self.debt_limit{
-            let player1 = MultiPlayerMoney {
-                uuid: player1_uuid,
-                money: money.clone(),
-                balance: balance - balance1,
-            };
-            let balance = self
-                .get_pl_money(player2_uuid.clone(), money.clone())
-                .unwrap();
-            let player2 = MultiPlayerMoney {
-                uuid: player2_uuid,
-                money: money,
-                balance: balance + balance1,
-            };
-            match self.update_pl_money(player1) {
-                Ok(_) => match self.update_pl_money(player2) {
-                    Ok(_) => return true,
-                    Err(_) => return false,
-                },
-                Err(_) => return false,
+    ) -> ResponseMessage {
+        let balance = self.get_pl_money(player1_uuid.clone(), money.clone());
+        match balance {
+            Ok(balance) => {
+                if balance >= self.debt_limit {
+                    let player1 = MultiPlayerMoney {
+                        uuid: player1_uuid,
+                        money: money.clone(),
+                        balance: balance - balance1,
+                    };
+                    let balance = self
+                        .get_pl_money(player2_uuid.clone(), money.clone())
+                        .unwrap();
+                    let player2 = MultiPlayerMoney {
+                        uuid: player2_uuid,
+                        money,
+                        balance: balance + balance1,
+                    };
+                    self.update_pl_money(player2);
+                    self.update_pl_money(player1)
+                } else {
+                    ResponseMessage {
+                        r#type: "error".to_string(),
+                        message: "超出负债额度".to_string(),
+                    }
+                }
             }
-        }else {
-            return false;
+            Err(_) => ResponseMessage {
+                r#type: "error".to_string(),
+                message: "请检查数据源是否存在".to_string(),
+            },
         }
     }
 }

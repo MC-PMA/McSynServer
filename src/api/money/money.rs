@@ -1,13 +1,12 @@
-use actix::*;
-
+/// This module provides functionality related to money in the API.
+use crate::{
+    api::pe::player_api::ResponseMessage,
+    sql::multi_economy::{MultiMoney, MultiMoneySqlite, MultiPlayerMoney},
+};
 use actix_web::{
     web::{self, Json},
     HttpResponse,
 };
-use log::info;
-use serde::{Deserialize, Serialize};
-
-use crate::sql::multi_economy::{MultiMoney, MultiMoneySqlite, MultiPlayerMoney};
 
 pub fn money_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -55,19 +54,7 @@ pub async fn add_money(
             message: "token错误".to_string(),
         });
     }
-    match data.add_money(multi_economy.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "添加成功".to_string(),
-        }),
-        Err(e) => {
-            //添加失败
-            HttpResponse::InternalServerError().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "添加失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.add_money(multi_economy.0))
 }
 
 // 删除一种经济体
@@ -83,19 +70,7 @@ pub async fn delete_money(
             message: "token错误".to_string(),
         });
     }
-    match data.delete_money_key(money.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "删除成功".to_string(),
-        }),
-        Err(e) => {
-            //删除失败
-            HttpResponse::InternalServerError().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "删除失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.delete_money_key(money.0))
 }
 
 // 修改经济体名
@@ -111,19 +86,7 @@ pub async fn update_money(
             message: "token错误".to_string(),
         });
     }
-    match data.update_money_key(multi_economy.0, path_str.0.clone()) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "修改成功".to_string(),
-        }),
-        Err(e) => {
-            //修改失败
-            HttpResponse::NotFound().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "修改失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.update_money_key(multi_economy.0, path_str.0.clone()))
 }
 
 // 检查某个经济体是否存在
@@ -132,21 +95,14 @@ pub async fn get_money_check(
     money_name: web::Path<String>,
 ) -> HttpResponse {
     match data.get_money_key(money_name.clone()) {
-        Ok(true) => HttpResponse::Ok().json(ResponseMessage {
+        true => HttpResponse::Ok().json(ResponseMessage {
             r#type: "success".to_string(),
             message: "存在".to_string(),
         }),
-        Ok(false) => HttpResponse::NotFound().json(ResponseMessage {
+        false => HttpResponse::Ok().json(ResponseMessage {
             r#type: "error".to_string(),
             message: "不存在".to_string(),
         }),
-        Err(e) => {
-            //查询失败
-            HttpResponse::InternalServerError().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "查询失败".to_string(),
-            })
-        }
     }
 }
 
@@ -167,7 +123,7 @@ pub async fn get_all_money(
             }
             Json(money)
         }
-        Err(e) => {
+        Err(_e) => {
             //查询失败
             Json(vec![])
         }
@@ -187,19 +143,7 @@ pub async fn add_player_init(
             message: "token错误".to_string(),
         });
     }
-    match data.init_pl_money(player_money.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "添加成功".to_string(),
-        }),
-        Err(e) => {
-            //添加失败
-            HttpResponse::InternalServerError().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "添加失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.init_pl_money(player_money.0))
 }
 
 // 获取玩家经济余额
@@ -215,10 +159,11 @@ pub async fn get_player_money(
         });
     }
     match data.get_pl_money(path_data.1.clone(), path_data.2.clone()) {
-        Ok(multi_moneys) => HttpResponse::Ok()
-            .content_type("application/json")
-            .body(multi_moneys.to_string()),
-        Err(e) => {
+        Ok(multi_moneys) => HttpResponse::Ok().json(ResponseMessage {
+            r#type: "success".to_string(),
+            message: multi_moneys.to_string(),
+        }),
+        Err(_e) => {
             //查询失败
             HttpResponse::InternalServerError().json(ResponseMessage {
                 r#type: "error".to_string(),
@@ -228,7 +173,7 @@ pub async fn get_player_money(
     }
 }
 
-// 更新玩家经济
+// 更新玩家经济余额
 pub async fn update_player_money(
     data: web::Data<MultiMoneySqlite>,
     path_token: web::Path<String>,
@@ -241,19 +186,8 @@ pub async fn update_player_money(
             message: "token错误".to_string(),
         });
     }
-    match data.update_pl_money(player_money.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "修改成功".to_string(),
-        }),
-        Err(e) => {
-            //修改失败
-            HttpResponse::NotFound().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "修改失败".to_string(),
-            })
-        }
-    }
+
+    HttpResponse::Ok().json(data.update_pl_money(player_money.0))
 }
 
 // 增加玩家经济
@@ -269,20 +203,7 @@ pub async fn add_player_balance(
             message: "token错误".to_string(),
         });
     }
-
-    match data.add_pl_money(player_money.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "修改成功".to_string(),
-        }),
-        Err(e) => {
-            //修改失败
-            HttpResponse::NotFound().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "修改失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.add_pl_money(player_money.0))
 }
 
 // 减少玩家经济
@@ -298,20 +219,7 @@ pub async fn reduce_player_balance(
             message: "token错误".to_string(),
         });
     }
-
-    match data.reduce_pl_money(player_money.0) {
-        Ok(_) => HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "修改成功".to_string(),
-        }),
-        Err(e) => {
-            //修改失败
-            HttpResponse::NotFound().json(ResponseMessage {
-                r#type: "error".to_string(),
-                message: "修改失败".to_string(),
-            })
-        }
-    }
+    HttpResponse::Ok().json(data.reduce_pl_money(player_money.0))
 }
 
 // 玩家经济转账
@@ -327,26 +235,10 @@ pub async fn transfer_player_balance(
         });
     }
 
-    if data.transfer_pl_money(
+    HttpResponse::Ok().json(data.transfer_pl_money(
         path_data.1.clone(),
         path_data.2.clone(),
-        path_data.3.clone(),
+        path_data.3,
         path_data.4.clone(),
-    ) {
-        return HttpResponse::Ok().json(ResponseMessage {
-            r#type: "success".to_string(),
-            message: "转账成功".to_string(),
-        });
-    } else {
-        return HttpResponse::InternalServerError().json(ResponseMessage {
-            r#type: "error".to_string(),
-            message: "转账失败".to_string(),
-        });
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct ResponseMessage {
-    r#type: String,
-    message: String,
+    ))
 }
